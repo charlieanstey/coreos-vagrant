@@ -1,0 +1,82 @@
+#cloud-config
+
+---
+coreos:
+  etcd2:
+    advertise-client-urls: http://$public_ipv4:2379
+    initial-advertise-peer-urls: http://$private_ipv4:2380
+    listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+    listen-peer-urls: http://$private_ipv4:2380,http://$private_ipv4:7001
+    discovery: https://discovery.etcd.io/a83dd8502eb50a900acc340a09ba647c
+  fleet:
+    public-ip: $public_ipv4
+  flannel:
+    interface: $public_ipv4
+  units:
+  - name: etcd2.service
+    command: start
+  - name: fleet.service
+    command: start
+  - name: flanneld.service
+    drop-ins:
+    - name: 50-network-config.conf
+      content: |
+        [Service]
+        ExecStartPre=/usr/bin/etcdctl set /coreos.com/network/config '{ "Network": "10.1.0.0/16" }'
+    command: start
+  - name: docker-tcp.socket
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Docker Socket for the API
+
+      [Socket]
+      ListenStream=2375
+      Service=docker.service
+      BindIPv6Only=both
+
+      [Install]
+      WantedBy=sockets.target
+  - name: 00-eth0.network
+    runtime: true
+    content: |
+      [Match]
+      Name=eth0
+
+      [Network]
+      Address=10.10.32.23/22
+      Gateway=10.10.35.1
+      DNS=8.8.8.8
+      DNS=8.8.4.4
+  - name: down-interfaces.service
+    command: start
+    content: |
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/ip link set eth0 down
+      ExecStart=/usr/bin/ip addr flush dev eth0
+  - name: systemd-networkd.service
+    command: restart
+hostname: d53-docker
+users:
+- name: odin
+  groups:
+  - sudo
+  - docker
+  ssh-authorized-keys:
+  - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDCa7m6l/bwa9tJAfch0Tm+qEP4+B0nc0WMmF7i0CEt5s/fj6cv8Opz6u3qOsfF0yUStuqsCuouTgDPO63gCecw1kX/h585t+cpPcI3fGMXUpB6rY5p9tDa8VcRavVL9Lqg90Gfb2H/iTjiKAMaJRp2OnWMEv9lBV+7ZYV7ZRXLQe56t2aEf/3BNhZhK2jQl2tLvN2Llw040JnaV4OOHZSJXJYaA+GIOT822hGm/IVVNyz0TZ3EWvPjfWYQ6+xPk1WbnEsdPDZBQ8vXJEm3TklY2KXZHNFo9xYLBMuiv0AYbvYduC5eSjV0Bo/yol6UQP8Yf4ivvA+zo/NN7It9TVuX
+    charlie.anstey@degree53.com
+write_files:
+- path: /etc/resolv.conf
+  permissions: '0644'
+  owner: root
+  content: |
+    nameserver 10.10.32.14
+    nameserver 8.8.8.8
+    search degree53.local
+- path: /etc/motd
+  permissions: '0644'
+  owner: root
+  content: |
+    Sup dude!
