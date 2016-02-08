@@ -42,7 +42,7 @@ coreos:
     runtime: true
     content: |
       [Match]
-      Name=eth0
+      Name=ens32
 
       [Network]
       Address=10.10.32.23/22
