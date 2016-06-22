@@ -7,11 +7,11 @@ coreos:
     initial-advertise-peer-urls: http://$private_ipv4:2380
     listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
     listen-peer-urls: http://$private_ipv4:2380,http://$private_ipv4:7001
-    discovery: https://discovery.etcd.io/a83dd8502eb50a900acc340a09ba647c
+    discovery: https://discovery.etcd.io/1d9968aaa542c0db4bcd856093729632
   fleet:
-    public-ip: $public_ipv4
+    public-ip: "$public_ipv4"
   flannel:
-    interface: $public_ipv4
+    interface: "$public_ipv4"
   units:
   - name: etcd2.service
     command: start
@@ -38,17 +38,6 @@ coreos:
 
       [Install]
       WantedBy=sockets.target
-  - name: 00-eth0.network
-    runtime: true
-    content: |
-      [Match]
-      Name=ens32
-
-      [Network]
-      Address=10.10.32.23/22
-      Gateway=10.10.35.1
-      DNS=8.8.8.8
-      DNS=8.8.4.4
   - name: down-interfaces.service
     command: start
     content: |
@@ -58,6 +47,21 @@ coreos:
       ExecStart=/usr/bin/ip addr flush dev eth0
   - name: systemd-networkd.service
     command: restart
+  - name: download-compose.service
+    enable: true
+    content: |
+      [Unit]
+      Description=Download Docker Compose
+      Documentation=https://docs.docker.com/compose
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=-/usr/bin/mkdir -p /opt/bin
+      ExecStart=/bin/bash -c "curl -L https://github.com/docker/compose/releases/download/1.5.2/docker-compose-`uname -s`-`uname -m` > /opt/bin/docker-compose"
+      ExecStart=/bin/chmod +x /opt/bin/docker-compose
 hostname: d53-docker
 users:
 - name: odin
@@ -68,15 +72,26 @@ users:
   - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDCa7m6l/bwa9tJAfch0Tm+qEP4+B0nc0WMmF7i0CEt5s/fj6cv8Opz6u3qOsfF0yUStuqsCuouTgDPO63gCecw1kX/h585t+cpPcI3fGMXUpB6rY5p9tDa8VcRavVL9Lqg90Gfb2H/iTjiKAMaJRp2OnWMEv9lBV+7ZYV7ZRXLQe56t2aEf/3BNhZhK2jQl2tLvN2Llw040JnaV4OOHZSJXJYaA+GIOT822hGm/IVVNyz0TZ3EWvPjfWYQ6+xPk1WbnEsdPDZBQ8vXJEm3TklY2KXZHNFo9xYLBMuiv0AYbvYduC5eSjV0Bo/yol6UQP8Yf4ivvA+zo/NN7It9TVuX
     charlie.anstey@degree53.com
 write_files:
-- path: /etc/resolv.conf
+- path: "/etc/resolv.conf"
   permissions: '0644'
   owner: root
   content: |
     nameserver 10.10.32.14
     nameserver 8.8.8.8
     search degree53.local
-- path: /etc/motd
+- path: "/etc/motd"
   permissions: '0644'
   owner: root
   content: |
     Sup dude!
+- path: "/etc/systemd/network/static.network"
+  owner: root
+  content: |
+    [Match]
+    Name=ens32
+
+    [Network]
+    Address10.10.32.23
+    Gateway=10.10.35.1
+    DNS=8.8.8.8
+    DNS=8.8.4.4
